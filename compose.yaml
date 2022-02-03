@@ -1,0 +1,102 @@
+version: "3"
+
+services:
+  nv_migrations:
+    # build:
+    #   context: .
+    #   dockerfile: ./Dockerfile
+    # image: nonoviumvideo/nonoviumvideo:latest
+    image: nonovium/vidcms:0.1.0
+    volumes:
+      - ./:/home/nonovium.video/nonoviumvideo/
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_CELERY_BEAT: 'no'
+      ADMIN_USER: 'admin'
+      ADMIN_EMAIL: 'admin@localhost'
+      #ADMIN_PASSWORD: 'uncomment_and_set_password_here'
+    command: "./deploy/docker/prestart.sh"
+    restart: on-failure
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+  nv_web:
+    # image: nonoviumvideo/nonoviumvideo:latest
+    # build:
+    #   context: .
+    #   dockerfile: ./Dockerfile
+    # image: nonoviumvideo/nonoviumvideo:latest
+    image: nonovium/vidcms:0.1.0
+    deploy:
+      replicas: 1
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/home/nonovium.video/nonoviumvideo/
+    environment:
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_MIGRATIONS: 'no'
+    depends_on:
+      - migrations
+  nv_celery_beat:
+    # build:
+    #   context: .
+    #   dockerfile: ./Dockerfile
+    # image: nonoviumvideo/nonoviumvideo:latest
+    image: nonovium/vidcms:0.1.0
+    volumes:
+      - ./:/home/nonovium.video/nonoviumvideo/
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_MIGRATIONS: 'no'
+    depends_on:
+      - redis
+  nv_celery_worker:
+    # build:
+    #   context: .
+    #   dockerfile: ./Dockerfile
+    # image: nonoviumvideo/nonoviumvideo:latest
+    image: nonovium/vidcms:0.1.0
+    deploy:
+      replicas: 1
+    volumes:
+      - ./:/home/nonovium.video/nonoviumvideo/
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_MIGRATIONS: 'no'
+    depends_on:
+      - migrations
+  db:
+    image: postgres:13
+    volumes:
+      - ../postgres_data:/var/lib/postgresql/data/
+    restart: always
+    environment:
+      POSTGRES_USER: nonoviumvideo
+      POSTGRES_PASSWORD: nonoviumvideo
+      POSTGRES_DB: nonoviumvideo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nonoviumvideo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: "redis:alpine"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli","ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
